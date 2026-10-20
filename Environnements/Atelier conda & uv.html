@@ -1,0 +1,819 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Atelier conda &amp; uv</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout : atelier — missions à gauche, terminal simulé à droite, état du Mac fictif dessous, mémo en bas */
+:root{
+  --bg:#ECF0F2; --surface:#FAFCFC; --surface-2:#E1E8EB; --ink:#15222B; --muted:#54636D; --line:#CAD4D9;
+  --accent:#1D6B57; --accent-soft:#D3E8E0; --warn:#A44E1B; --warn-soft:#F5E1D2; --ok:#2B7749;
+  --term-bg:#0F1A21; --term-fg:#D2DCE2; --term-dim:#7B8C97; --term-env:#7CCFB5; --term-base:#F2A867;
+  --term-err:#FF8E84; --term-path:#93BCEB; --term-line:#22313B; --term-ok:#8FD7A6;
+  --f-display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1317; --surface:#131D23; --surface-2:#1A262D; --ink:#E1E8EC; --muted:#93A3AD; --line:#26343C;
+    --accent:#5FC0A3; --accent-soft:#163830; --warn:#F2A867; --warn-soft:#3A2617; --ok:#6CCB8F;
+    --term-bg:#081014; --term-line:#1D2A32; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1317; --surface:#131D23; --surface-2:#1A262D; --ink:#E1E8EC; --muted:#93A3AD; --line:#26343C;
+  --accent:#5FC0A3; --accent-soft:#163830; --warn:#F2A867; --warn-soft:#3A2617; --ok:#6CCB8F;
+  --term-bg:#081014; --term-line:#1D2A32; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 72px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(30px,4.4vw,44px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:600}
+h3{font-size:17px;font-weight:600}
+p{margin:0}
+code,kbd{font-family:var(--f-mono);font-size:.88em}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+header.top{display:flex;flex-wrap:wrap;gap:18px 32px;align-items:end;justify-content:space-between;margin-bottom:22px}
+header.top .intro{max-width:62ch;display:grid;gap:8px}
+header.top .intro p{color:var(--muted)}
+.scores{display:flex;gap:10px;flex-wrap:wrap}
+.score{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px 14px;min-width:120px}
+.score b{display:block;font-family:var(--f-display);font-size:24px;font-variant-numeric:tabular-nums;line-height:1.1}
+.score span{font-size:12px;color:var(--muted)}
+.score.bad b{color:var(--warn)}
+
+.lab{display:grid;grid-template-columns:310px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.lab{grid-template-columns:1fr}}
+
+/* Missions */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.missions{display:grid;gap:6px;margin:10px 0 16px}
+.mbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;padding:8px 10px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer}
+.mbtn:hover{background:var(--surface-2)}
+.mbtn[aria-current="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.mbtn .tag{font-family:var(--f-mono);font-size:11px;padding:1px 6px;border-radius:4px;background:var(--surface-2);color:var(--muted);flex:none}
+.mbtn[aria-current="true"] .tag{background:var(--surface)}
+.mbtn .tick{margin-left:auto;font-size:12px;color:var(--ok);font-weight:600;flex:none}
+.mbtn .t{min-width:0}
+.brief{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:12px}
+.brief p{font-size:14px}
+ol.steps{list-style:none;margin:0;padding:0;display:grid;gap:8px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:24px 1fr;gap:8px;font-size:14px;align-items:start}
+ol.steps li::before{content:counter(s);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);font-size:12px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+ol.steps li.done{color:var(--muted)}
+ol.steps li.done span{text-decoration:line-through;text-decoration-color:var(--line)}
+ol.steps li.done::before{content:"✓";background:var(--accent);border-color:var(--accent);color:var(--surface)}
+ol.steps li.next::before{border-color:var(--accent);color:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-size:13px;font-weight:500;border-radius:7px;padding:6px 12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.primary:hover{filter:brightness(1.08);color:var(--surface)}
+.btn:focus-visible,.mbtn:focus-visible,#cmd:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hint{background:var(--surface-2);border-radius:8px;padding:10px 12px;display:grid;gap:8px;font-size:13px}
+.hint code{display:block;white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+.success{background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:14px}
+.success b{font-family:var(--f-display)}
+
+/* Terminal */
+.term{background:var(--term-bg);border:1px solid var(--term-line);border-radius:var(--r);display:flex;flex-direction:column;height:min(560px,72vh);min-width:0;overflow:hidden}
+.term-bar{display:flex;justify-content:space-between;gap:12px;padding:8px 14px;border-bottom:1px solid var(--term-line);font-family:var(--f-mono);font-size:12px;color:var(--term-dim)}
+.term-bar button{background:none;border:none;color:var(--term-dim);font:inherit;cursor:pointer;padding:0}
+.term-bar button:hover{color:var(--term-fg)}
+.term-out{flex:1;overflow:auto;padding:12px 16px;font-family:var(--f-mono);font-size:13px;line-height:1.6;color:var(--term-fg);white-space:pre-wrap;word-break:break-word}
+.term-out .l{min-height:1.6em}
+.c-env{color:var(--term-env)} .c-base{color:var(--term-base)} .c-prompt{color:var(--term-dim)} .c-cmd{color:var(--term-fg);font-weight:600}
+.c-dim{color:var(--term-dim)} .c-err{color:var(--term-err)} .c-ok{color:var(--term-ok)} .c-path{color:var(--term-path)}
+.coach{margin:6px 0 8px;padding:8px 10px;border-radius:6px;font-family:var(--f-body);font-size:13.5px;line-height:1.5;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:baseline}
+.coach .lbl{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.06em;padding:2px 6px;border-radius:4px}
+.coach.mistake{background:rgba(255,142,132,.12);color:#FFD9D4}
+.coach.mistake .lbl{background:var(--term-err);color:#2A0E0B}
+.coach.tip{background:rgba(124,207,181,.10);color:#CDEDE2}
+.coach.tip .lbl{background:var(--term-env);color:#0B2A21}
+.coach.warn{background:rgba(242,168,103,.12);color:#F8DCC3}
+.coach.warn .lbl{background:var(--term-base);color:#2E1806}
+.coach.mission{background:rgba(147,188,235,.10);color:#D8E7F8}
+.coach.mission .lbl{background:var(--term-path);color:#0D1F33}
+.coach code{font-size:12.5px;color:#fff}
+.term-in{display:flex;align-items:center;gap:0;border-top:1px solid var(--term-line);padding:10px 16px;font-family:var(--f-mono);font-size:13px;min-width:0}
+.term-in .p{white-space:nowrap;flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis}
+#cmd{flex:1;min-width:0;background:transparent;border:none;color:var(--term-fg);font:inherit;font-weight:600;caret-color:var(--term-env);padding:2px 0 2px 6px;border-radius:4px}
+
+/* État du Mac fictif */
+.state{margin-top:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px}
+.state .panel{display:grid;gap:10px;align-content:start}
+.envs{display:grid;gap:8px}
+.env{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;gap:6px}
+.env.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.env.dirty{border-color:var(--warn);background:var(--warn-soft)}
+.env .h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.env .h b{font-family:var(--f-mono);font-size:13.5px}
+.env .h small{color:var(--muted);font-size:12px}
+.badge{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--accent);color:var(--surface)}
+.badge.w{background:var(--warn)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:var(--f-mono);font-size:11.5px;padding:1px 6px;border-radius:4px;background:var(--surface-2);color:var(--ink)}
+.chip.pip{background:transparent;border:1px dashed var(--muted)}
+.chip.bad{background:var(--warn);color:var(--surface)}
+.empty{font-size:13px;color:var(--muted)}
+.legend{font-size:12px;color:var(--muted)}
+
+/* Mémo */
+.memo{margin-top:56px;display:grid;gap:22px}
+.memo-head{display:grid;gap:6px;max-width:66ch}
+.memo-head p{color:var(--muted)}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px;counter-reset:r;list-style:none;padding:0;margin:0}
+.rules li{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;font-size:14px;display:grid;gap:4px}
+.rules li strong{font-family:var(--f-display);font-size:16px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;align-content:start;min-width:0}
+.card > p{font-size:14px;color:var(--muted)}
+.cmds{display:grid;gap:4px;min-width:0}
+.cmd{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:var(--surface-2);border-radius:6px;padding:6px 8px 6px 10px}
+.cmd code{white-space:pre-wrap;word-break:break-word}
+.cmd .acts{display:flex;gap:4px}
+.cmd button{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:5px;padding:2px 7px;cursor:pointer}
+.cmd button:hover{color:var(--accent);border-color:var(--accent)}
+.cmt{font-family:var(--f-mono);font-size:12px;color:var(--muted);padding:6px 2px 0}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td code{white-space:nowrap}
+ul.alerts{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14px}
+footer{margin-top:40px;font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.mbtn,.btn{transition:background .15s,border-color .15s,color .15s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="intro">
+      <span class="eyebrow">Simulateur · rien ne touche ton vrai Mac</span>
+      <h1>Atelier conda &amp; uv</h1>
+      <p>Tape les commandes comme dans ton terminal. Le Mac simulé réagit comme le tien : Miniforge, l'env <code>certif</code>, aucun env actif à l'ouverture. Les bêtises sont signalées et expliquées, sans conséquence.</p>
+    </div>
+    <div class="scores" aria-live="polite">
+      <div class="score"><b id="sc-done">0/5</b><span>missions réussies</span></div>
+      <div class="score bad"><b id="sc-bad">0</b><span>bêtises (sans dégât)</span></div>
+    </div>
+  </header>
+
+  <section class="lab">
+    <aside class="panel" aria-label="Missions">
+      <span class="eyebrow">Missions</span>
+      <div class="missions" id="missions"></div>
+      <div class="brief" id="brief"></div>
+    </aside>
+
+    <div style="min-width:0">
+      <div class="term" id="term">
+        <div class="term-bar"><span>nicolasbour — zsh — Mac simulé</span><button type="button" id="reset" title="Remet le Mac simulé dans l'état de départ de la mission">↺ recommencer la mission</button></div>
+        <div class="term-out" id="out" role="log" aria-live="polite"></div>
+        <form class="term-in" id="form" autocomplete="off">
+          <span class="p" id="prompt"></span>
+          <input id="cmd" type="text" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Commande" placeholder="tape une commande, ou help">
+        </form>
+      </div>
+      <div class="state" id="state"></div>
+    </div>
+  </section>
+
+  <section class="memo" id="memo">
+    <div class="memo-head">
+      <span class="eyebrow">Mémo</span>
+      <h2>Un projet, un environnement</h2>
+      <p>La cheatsheet complète. Chaque commande a un bouton <b>Essayer</b> qui la place dans le simulateur, et un bouton <b>Copier</b> pour ton vrai terminal.</p>
+    </div>
+
+    <ol class="rules">
+      <li><strong>base reste vide</strong>Il sert uniquement à faire tourner conda. On n'y installe jamais rien.</li>
+      <li><strong>Un projet = un env</strong>Créé avant d'écrire la première ligne de code.</li>
+      <li><strong>La recette vit dans le projet</strong><code>environment.yml</code>, ou <code>pyproject.toml</code> + <code>uv.lock</code>.</li>
+      <li><strong>Regarde le prompt</strong>Avant d'installer, le prompt doit afficher <code>(nom-du-projet)</code>, ni <code>(base)</code> ni rien.</li>
+      <li><strong>Projet fini, env supprimé</strong>La recette suffit pour le recréer.</li>
+    </ol>
+
+    <div class="card">
+      <h3>Quel outil choisir ?</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Type de projet</th><th>Outil</th><th>Chez toi</th></tr></thead>
+        <tbody>
+          <tr><td>Notebooks, data science, Spark, PyTorch, cours</td><td><b>conda</b> (Miniforge)</td><td><code>certif</code></td></tr>
+          <tr><td>Application, API, script, outil en ligne de commande</td><td><b>uv</b></td><td>BrocAI ops, obsidian-rag, Rocky</td></tr>
+        </tbody>
+      </table></div>
+      <p>conda gère aussi ce qui n'est pas du Python (Java pour Spark, librairies C). uv est beaucoup plus rapide et range tout dans le dossier du projet.</p>
+    </div>
+
+    <div class="cols">
+      <div class="card">
+        <h3>Nouveau projet avec conda</h3>
+        <div class="cmds" data-block>
+          <div class="cmt"># 1. Créer l'env (toujours préciser Python)</div>
+          <div class="cmd"><code>conda create -n mon_projet python=3.12 -y</code></div>
+          <div class="cmd"><code>conda activate mon_projet</code></div>
+          <div class="cmt"># 2. Installer ce dont j'ai besoin (+ ipykernel pour les notebooks)</div>
+          <div class="cmd"><code>conda install pandas scikit-learn plotly ipykernel -y</code></div>
+          <div class="cmt"># 3. Rendre l'env visible dans Jupyter / VS Code</div>
+          <div class="cmd"><code>python -m ipykernel install --user --name mon_projet --display-name "Python (mon_projet)"</code></div>
+          <div class="cmt"># 4. Sauvegarder la recette dans le dossier du projet</div>
+          <div class="cmd"><code>conda env export --from-history | grep -v "^prefix" &gt; environment.yml</code></div>
+          <div class="cmt"># Recréer l'env ailleurs, ou après l'avoir supprimé</div>
+          <div class="cmd"><code>conda env create -f environment.yml</code></div>
+        </div>
+        <p>Un paquet absent de conda-forge ? <code>python -m pip install nom</code>, mais seulement <b>dans l'env actif du projet</b> et <b>après</b> les paquets conda.</p>
+      </div>
+
+      <div class="card">
+        <h3>Nouveau projet avec uv</h3>
+        <div class="cmds" data-block>
+          <div class="cmt"># Dans un dossier dédié, jamais directement dans ~</div>
+          <div class="cmd"><code>mkdir mon_app &amp;&amp; cd mon_app</code></div>
+          <div class="cmd"><code>uv init --python 3.13</code></div>
+          <div class="cmd"><code>uv add fastapi requests</code></div>
+          <div class="cmd"><code>uv run python main.py</code></div>
+          <div class="cmt"># Projet récupéré : recrée .venv depuis uv.lock</div>
+          <div class="cmd"><code>uv sync</code></div>
+          <div class="cmt"># Dépendance de développement</div>
+          <div class="cmd"><code>uv add --dev pytest</code></div>
+          <div class="cmt"># Outil global isolé (comme obsidian-rag)</div>
+          <div class="cmd"><code>uv tool install --editable .</code></div>
+        </div>
+        <p>Si un env conda est actif, fais d'abord <code>conda deactivate</code> : sinon uv peut construire le <code>.venv</code> avec le Python de conda. <code>--managed-python</code> force uv à utiliser son propre Python. Ajoute <code>.venv/</code> au <code>.gitignore</code>.</p>
+      </div>
+
+      <div class="card">
+        <h3>Jupyter et VS Code</h3>
+        <p>En haut à droite du notebook, <b>Select Kernel</b>, puis choisis <code>Python (mon_projet)</code> ou le <code>.venv</code> du projet. Si l'env n'apparaît pas, c'est qu'<code>ipykernel</code> n'y est pas installé.</p>
+        <div class="cmds" data-block>
+          <div class="cmd"><code>jupyter kernelspec list</code></div>
+          <div class="cmd"><code>jupyter kernelspec uninstall mon_projet -y</code></div>
+        </div>
+        <p><code>jupyter</code> n'existe que dans un env qui contient <code>ipykernel</code>. Supprime le kernel <b>avant</b> l'env, tant qu'il est encore actif.</p>
+      </div>
+
+      <div class="card">
+        <h3>Ménage, une fois par trimestre</h3>
+        <div class="cmds" data-block>
+          <div class="cmt"># Un env sans projet actif ? On le supprime</div>
+          <div class="cmd"><code>conda env list</code></div>
+          <div class="cmd"><code>conda env remove -n vieux_projet -y</code></div>
+          <div class="cmt"># Caches</div>
+          <div class="cmd"><code>conda clean --all -y</code></div>
+          <div class="cmd"><code>python3 -m pip cache purge</code></div>
+          <div class="cmd"><code>uv cache prune</code></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Commandes du quotidien</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Je veux…</th><th>Commande</th></tr></thead>
+        <tbody>
+          <tr><td>Lister mes envs conda</td><td><code>conda env list</code></td></tr>
+          <tr><td>Activer / désactiver</td><td><code>conda activate nom</code> · <code>conda deactivate</code></td></tr>
+          <tr><td>Voir les paquets de l'env actif</td><td><code>conda list</code></td></tr>
+          <tr><td>Savoir quel Python j'utilise</td><td><code>which python</code></td></tr>
+          <tr><td>Supprimer un env</td><td><code>conda env remove -n nom -y</code></td></tr>
+          <tr><td>Mettre à jour conda (la seule chose qu'on fait dans base)</td><td><code>conda update -n base conda</code></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3>Signaux d'alerte</h3>
+      <ul class="alerts">
+        <li>Je tape <code>pip install</code> alors que le prompt affiche <code>(base)</code> ou rien : <b>stop</b>, j'active d'abord l'env du projet.</li>
+        <li><code>zsh: command not found: pip</code> ou <code>python</code> : c'est normal, aucun env n'est actif. C'est le garde-fou, pas une panne.</li>
+        <li>Un notebook tourne sur le kernel générique « Python 3 » : je choisis le kernel du projet.</li>
+        <li>Je copie un <code>!pip install</code> trouvé sur internet dans un notebook : je l'installe plutôt dans l'env, puis je mets à jour <code>environment.yml</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>Le simulateur reproduit le comportement de conda 26, uv et zsh sur macOS de façon simplifiée. Les versions de paquets affichées sont indicatives.</footer>
+</div>
+
+<script>
+/* ---------- Cœur du simulateur (aucune dépendance au DOM) ---------- */
+const HOMEABS='/Users/nicolasbour', MF=HOMEABS+'/miniforge3';
+const BASE_ORIG=['conda','python','pip','mamba'];
+const VERS={python:'3.12.15',pandas:'2.3.3',numpy:'2.3.4','scikit-learn':'1.7.2',plotly:'6.3.1',ipykernel:'7.1.0',matplotlib:'3.10.7',seaborn:'0.13.2',pyspark:'4.0.1',lightgbm:'4.6.0',xgboost:'3.1.1',catboost:'1.2.8',pytorch:'2.9.0',torch:'2.9.0',fastapi:'0.120.0',requests:'2.32.5',yfinance:'0.2.66',pytest:'8.4.2',streamlit:'1.50.0',jupyter:'1.1.1',polars:'1.34.0',conda:'26.7.2',pip:'25.2',mamba:'2.3.2',uvicorn:'0.38.0',httpx:'0.28.1'};
+const PYFULL={'3.10':'3.10.19','3.11':'3.11.14','3.12':'3.12.15','3.13':'3.13.15','3.14':'3.14.2'};
+const ver=p=>VERS[p]||'1.0.0';
+const fullPy=v=>PYFULL[v]||v;
+const pkgName=s=>String(s).replace(/\[.*?\]/g,'').split(/[<>=!~ ]/)[0].toLowerCase();
+const abs=p=>p.replace(/^~/,HOMEABS);
+const parent=p=>p==='~'?null:p.slice(0,p.lastIndexOf('/'));
+const base=p=>p.split('/').pop();
+const cmpVer=(a,b)=>{const x=a.split('.').map(Number),y=b.split('.').map(Number);for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d}return 0};
+function mkEnv(py,explicit,conda,pip){return{python:py,pyExplicit:explicit,conda:[...(conda||[])],pip:[...(pip||[])]}}
+function hasPkg(env,p){p=pkgName(p);return env.conda.some(x=>pkgName(x)===p)||env.pip.some(x=>pkgName(x)===p)}
+function addSpec(arr,spec){const n=pkgName(spec),i=arr.findIndex(x=>pkgName(x)===n);if(i>=0)arr[i]=spec;else arr.push(spec)}
+function delSpec(arr,p){const n=pkgName(p),i=arr.findIndex(x=>pkgName(x)===n);if(i>=0){arr.splice(i,1);return true}return false}
+function yml(name,py,deps,pip){let s=`name: ${name}\nchannels:\n  - conda-forge\ndependencies:\n  - python=${py}\n`;deps.forEach(d=>s+=`  - ${d}\n`);if(pip&&pip.length){s+='  - pip\n  - pip:\n';pip.forEach(d=>s+=`    - ${d}\n`)}return s}
+function parseYml(t){const r={name:null,python:null,deps:[],pip:[]};let inPip=false;for(const raw of t.split('\n')){const line=raw.replace(/\s+$/,'');let m;if(m=line.match(/^name:\s*(.+)$/)){r.name=m[1].trim();continue}if(/^\s*-\s*pip:\s*$/.test(line)){inPip=true;continue}if(m=line.match(/^(\s*)-\s*(.+)$/)){const ind=m[1].length,v=m[2].trim().replace(/^["']|["']$/g,'');if(inPip&&ind>=4){r.pip.push(v);continue}inPip=false;if(pkgName(v)==='python'){r.python=(v.match(/(\d+\.\d+)/)||[])[1]||null;continue}if(v==='pip')continue;if(/conda-forge|defaults/.test(v)&&!/=/.test(v))continue;r.deps.push(v.replace(/=([\d.]+)=.*$/,'=$1'))}}return r}
+
+let S=null; // état du Mac simulé
+const BUS={mistake:()=>{}};
+
+function baseState(){
+  const s={cwd:'~',dirs:new Set(['~','~/Desktop','~/Desktop/Projets_IA','~/Desktop/Projets_IA/Projets_certif','~/Developer','~/Documents','~/miniforge3']),
+    files:{},envs:{},active:null,kernels:{},uv:{},cache:1840,pipCache:2900,uvCache:960,ran:{},catted:{},systemPip:[],tools:['obsidian-rag'],hist:[]};
+  s.envs.base=mkEnv('3.14',true,BASE_ORIG);
+  s.envs.certif=mkEnv('3.12',true,['python','ipykernel','pandas<3','numpy','scikit-learn','plotly','matplotlib','seaborn','pyspark','xgboost','catboost','pytorch']);
+  s.kernels.certif={display:'Python (certif)',env:'certif'};
+  s.files['~/Desktop/Projets_IA/Projets_certif/environment.yml']=yml('certif','3.12',['ipykernel','pandas<3','numpy','scikit-learn','plotly','matplotlib','seaborn','pyspark','xgboost','catboost','pytorch']);
+  s.files['~/Desktop/Projets_IA/Projets_certif/gridsearch_models.ipynb']='{}';
+  return s;
+}
+function resolve(p){
+  if(p===undefined||p===''||p==='~')return'~';
+  if(p.startsWith(HOMEABS))p='~'+p.slice(HOMEABS.length);
+  if(p.startsWith('$HOME'))p='~'+p.slice(5);
+  let parts;
+  if(p==='~'||p.startsWith('~/'))parts=p.split('/');
+  else if(p.startsWith('/'))return null;
+  else parts=(S.cwd+'/'+p).split('/');
+  const out=[];for(const x of parts){if(!x||x==='.')continue;if(x==='..'){if(out.length>1)out.pop();continue}out.push(x)}
+  return out.join('/')||'~';
+}
+const envPrefix=n=>n==='base'?MF:`${MF}/envs/${n}`;
+function findUv(dir){while(dir){if(S.uv[dir])return S.uv[dir];if(dir==='~')break;dir=parent(dir)}return null}
+function children(dir){const d=[],f=[];for(const x of S.dirs)if(parent(x)===dir&&x!==dir)d.push(base(x));for(const k in S.files)if(parent(k)===dir)f.push(base(k));return{d:d.sort(),f:f.sort()}}
+function writePyproject(pr){const n=base(pr.dir).replace(/_/g,'-').toLowerCase();let s=`[project]\nname = "${n}"\nversion = "0.1.0"\nrequires-python = ">=${pr.python}"\ndependencies = [\n`;pr.deps.forEach(d=>s+=`    "${d}>=${ver(d)}",\n`);s+=']\n';if(pr.dev.length){s+='\n[dependency-groups]\ndev = [\n';pr.dev.forEach(d=>s+=`    "${d}>=${ver(d)}",\n`);s+=']\n'}S.files[pr.dir+'/pyproject.toml']=s}
+
+/* découpe hors guillemets */
+function splitTop(str,sep){const out=[];let cur='',q=null;for(let i=0;i<str.length;i++){const c=str[i];if(q){if(c===q)q=null;cur+=c;continue}if(c==='"'||c==="'"){q=c;cur+=c;continue}if(str.startsWith(sep,i)&&!(sep==='|'&&str[i+1]==='|')&&!(sep==='>'&&str[i+1]==='>')){out.push(cur);cur='';i+=sep.length-1;continue}cur+=c}out.push(cur);return out}
+function tokenize(s){const out=[];let cur='',q=null,has=false;for(const c of s){if(q){if(c===q)q=null;else cur+=c}else if(c==='"'||c==="'"){q=c;has=true}else if(/\s/.test(c)){if(cur||has){out.push(cur);cur='';has=false}}else cur+=c}if(cur||has)out.push(cur);return out}
+
+/* Exécute une ligne complète : renvoie une liste d'entrées {t,c} (c = classe) */
+function runLine(line){
+  const res=[];let clear=false;
+  S.hist.push(line);
+  for(const seg of splitTop(line,'&&')){
+    if(!seg.trim())continue;
+    const stages=splitTop(seg,'|');
+    let last=stages[stages.length-1],redir=null,append=false;
+    let parts=splitTop(last,'>>');
+    if(parts.length>1){append=true;redir=parts.pop().trim();last=parts.join('>>')}
+    else{parts=splitTop(last,'>');if(parts.length>1){redir=parts.pop().trim();last=parts.join('>')}}
+    stages[stages.length-1]=last;
+    const R=exec(tokenize(stages[0]));
+    if(R.clear)clear=true;
+    let out=R.out;
+    for(const st of stages.slice(1)){
+      const a=tokenize(st);
+      if(a[0]==='grep'){let inv=false,pat=null;for(const x of a.slice(1)){if(x==='-v')inv=true;else if(!x.startsWith('-'))pat=x}
+        let re;try{re=new RegExp(pat)}catch(e){re=/$^/}
+        out=out.filter(l=>re.test(l.t)!==inv)}
+      else if(a[0]==='head'){out=out.slice(0,10)}
+      else if(a[0]==='wc'){out=[{t:String(out.length),c:''}]}
+      else R.notes.push({t:`(pipe vers « ${a[0]} » non simulé)`,c:'dim'});
+    }
+    if(redir){
+      const p=resolve(tokenize(redir)[0]);
+      if(!p||!S.dirs.has(parent(p))){R.notes.push({t:`zsh: no such file or directory: ${redir}`,c:'err'});R.ok=false}
+      else{const txt=out.map(l=>l.t).join('\n')+'\n';S.files[p]=append?(S.files[p]||'')+txt:txt}
+      out=[];
+    }
+    res.push(...out,...R.notes);
+    if(!R.ok)break;
+  }
+  return{lines:res,clear};
+}
+
+function exec(argv){
+  const R={out:[],notes:[],ok:true};
+  const o=(t,c='')=>R.out.push({t,c});
+  const n=(t,c='tip')=>R.notes.push({t,c});
+  const fail=t=>{R.notes.push({t,c:'err'});R.ok=false};
+  const mistake=t=>{R.notes.push({t,c:'mistake'});BUS.mistake()};
+  if(!argv.length)return R;
+  const [cmd,...a]=argv;
+  const env=S.active?S.envs[S.active]:null;
+
+  const pipCmd=(label,a)=>{
+    const sub=a[0],proj=findUv(S.cwd);
+    if(label==='pip'&&!env){fail('zsh: command not found: pip');n('Normal : aucun env n\'est actif. C\'est le garde-fou. Active l\'env du projet (<code>conda activate …</code>), ou utilise <code>uv add</code> dans un projet uv.');return}
+    if(sub==='install'){
+      const pkgs=[];
+      for(let i=1;i<a.length;i++){if(a[i]==='-r'){const f=resolve(a[++i]);if(!S.files[f]){fail(`ERROR: Could not open requirements file: [Errno 2] No such file or directory: '${a[i]}'`);return}S.files[f].split('\n').map(x=>x.trim()).filter(x=>x&&!x.startsWith('#')).forEach(x=>pkgs.push(x))}else if(!a[i].startsWith('-'))pkgs.push(a[i])}
+      if(!pkgs.length){fail('ERROR: You must give at least one requirement to install (see "pip help install")');return}
+      const names=pkgs.map(pkgName);
+      if(!env){o('Defaulting to user installation because normal site-packages is not writeable','dim');o('Successfully installed '+names.map(x=>x+'-'+ver(x)).join(' '));names.forEach(x=>addSpec(S.systemPip,x));
+        mistake(`Aucun env n'est actif : ce pip est celui du Python de macOS (<code>/usr/bin/python3</code>, 3.9). ${names.join(', ')} atterrit hors de tout projet et ne sera visible dans aucun notebook. Active d'abord l'env du projet.`+(proj?' Ici, tu es dans un projet uv : la bonne commande est <code>uv add '+names.join(' ')+'</code>.':''));return}
+      if(S.active==='base'){names.forEach(x=>addSpec(env.pip,x));o('Successfully installed '+names.map(x=>x+'-'+ver(x)).join(' '));
+        mistake(`pip vient d'installer ${names.join(', ')} dans <b>base</b>. C'est exactement ce qui avait mis le désordre dans ton ancien Anaconda : conda ne voit pas ce que pip installe, et une mise à jour peut tout casser. Pour annuler : <code>python -m pip uninstall ${names.join(' ')} -y</code>.`);return}
+      names.forEach(x=>addSpec(env.pip,x));
+      o(`Collecting ${names.join(', ')}`,'dim');o('Successfully installed '+names.map(x=>x+'-'+ver(x)).join(' '),'ok');
+      n(proj?'Tu es dans un projet uv : ici, c\'est <code>uv add</code> qui gère les dépendances, pas pip.':'Ça marche, mais vérifie d\'abord si le paquet existe sur conda-forge (<code>conda install …</code>). pip en dernier recours, puis mets à jour <code>environment.yml</code>.');
+      return}
+    if(sub==='uninstall'){const t=env||{pip:S.systemPip,conda:[]};const list=env?env.pip:S.systemPip;a.slice(1).filter(x=>!x.startsWith('-')).forEach(x=>{if(delSpec(list,x))o(`Successfully uninstalled ${pkgName(x)}-${ver(pkgName(x))}`);else n(`WARNING: Skipping ${x} as it is not installed.`,'dim')});return}
+    if(sub==='list'||sub==='freeze'){const items=env?[...env.conda,...env.pip]:S.systemPip;if(sub==='list'){o('Package            Version');o('------------------ -------')}items.map(pkgName).sort().forEach(x=>o(sub==='list'?x.padEnd(19)+(x==='python'?fullPy(env.python):ver(x)):`${x}==${ver(x)}`));return}
+    if(sub==='cache'&&a[1]==='purge'){if(!S.pipCache)o('No matching packages found','dim');else o(`Files removed: 1342 (${S.pipCache} MB)`);S.pipCache=0;return}
+    fail(`ERROR: unknown command "${sub||''}"`);
+  };
+
+  switch(cmd){
+  case 'help':
+    o('Commandes simulées :','dim');
+    ['conda  create · activate · deactivate · install · remove · list · env list/export/create/remove · clean · update · info','uv     init · add · remove · run · sync · venv · pip install · cache prune · tool install/list','pip / pip3 / python -m pip  install · uninstall · list · freeze · cache purge','python / python3  --version · -m ipykernel install · script.py','jupyter kernelspec list · uninstall','cd · ls [-a] · pwd · mkdir [-p] · cat · touch · rm [-rf] · echo · which · clear · history','Enchaînements : &&, | grep [-v], > fichier'].forEach(x=>o('  '+x));
+    break;
+  case 'clear':R.clear=true;break;
+  case 'pwd':o(abs(S.cwd));break;
+  case 'echo':o(a.join(' '));break;
+  case 'history':S.hist.slice(0,-1).forEach((h,i)=>o(String(i+1).padStart(4)+'  '+h));break;
+  case 'cd':{const t=a[0];const p=resolve(t);if(p===null||!S.dirs.has(p)){if(p&&S.files[p])fail(`cd: not a directory: ${t}`);else if(p===null)fail(`cd: ${t} : hors du dossier personnel (non simulé)`);else fail(`cd: no such file or directory: ${t}`)}else S.cwd=p;break}
+  case 'ls':{const all=a.some(x=>/^-\w*a/.test(x));const tgt=a.find(x=>!x.startsWith('-'));const p=resolve(tgt);if(p===null||(!S.dirs.has(p)&&!S.files[p])){fail(`ls: ${tgt}: No such file or directory`);break}if(S.files[p]){o(tgt);break}const {d,f}=children(p);const items=[...d.map(x=>({t:x+'/',c:'path'})),...f.map(x=>({t:x,c:''}))].filter(x=>all||!x.t.startsWith('.'));if(items.length)o(items.map(x=>x.t).join('   '),'path');break}
+  case 'mkdir':{const pf=a.includes('-p');for(const t of a.filter(x=>!x.startsWith('-'))){const p=resolve(t);if(!p){fail(`mkdir: ${t}: hors du dossier personnel (non simulé)`);break}if(S.dirs.has(p)){if(!pf)fail(`mkdir: ${t}: File exists`);continue}if(!S.dirs.has(parent(p))){if(!pf){fail(`mkdir: ${t}: No such file or directory`);break}let q=p;const chain=[];while(q&&!S.dirs.has(q)){chain.push(q);q=parent(q)}chain.forEach(x=>S.dirs.add(x));continue}S.dirs.add(p)}
+    if(!a.filter(x=>!x.startsWith('-')).length)fail('usage: mkdir [-pv] [-m mode] directory_name ...');break}
+  case 'touch':for(const t of a){const p=resolve(t);if(!p||!S.dirs.has(parent(p))){fail(`touch: ${t}: No such file or directory`);break}if(!S.files[p])S.files[p]=''}break;
+  case 'cat':for(const t of a){const p=resolve(t);if(p&&S.dirs.has(p)){fail(`cat: ${t}: Is a directory`);break}if(!p||S.files[p]===undefined){fail(`cat: ${t}: No such file or directory`);break}S.catted[p]=true;S.files[p].replace(/\n$/,'').split('\n').forEach(l=>o(l))}break;
+  case 'rm':{const rec=a.some(x=>/^-\w*r/i.test(x));const PROT=['~','~/Desktop','~/Developer','~/Documents','~/Desktop/Projets_IA','~/miniforge3'];for(const t of a.filter(x=>!x.startsWith('-'))){const p=resolve(t);if(!p||PROT.includes(p)||p.startsWith('~/miniforge3')){fail(`rm: le simulateur refuse de supprimer ${t}. Dans la vraie vie aussi, réfléchis deux fois.`);break}
+      if(S.files[p]!==undefined){delete S.files[p];continue}
+      if(S.dirs.has(p)){if(!rec){fail(`rm: ${t}: is a directory`);break}for(const d of [...S.dirs])if(d===p||d.startsWith(p+'/'))S.dirs.delete(d);for(const f in S.files)if(f.startsWith(p+'/'))delete S.files[f];for(const u in S.uv){if(u===p||u.startsWith(p+'/'))delete S.uv[u]}const pr=S.uv[parent(p)];if(pr&&base(p)==='.venv'){pr.venv=false;pr.venvFromConda=null}if(!S.dirs.has(S.cwd))S.cwd=parent(p)||'~';continue}
+      if(!a.includes('-f')&&!a.some(x=>/^-\w*f/.test(x)))fail(`rm: ${t}: No such file or directory`)}break}
+  case 'code':o(`(VS Code s'ouvrirait sur ${abs(resolve(a[0]||'.'))})`,'dim');break;
+  case 'source':case 'exit':case 'open':o('(non simulé, sans effet)','dim');break;
+
+  case 'which':for(const t of a){
+      if(t==='python'||t==='python3'){if(env)o(envPrefix(S.active)+'/bin/python'+(t==='python3'?'3':''));else if(t==='python3')o('/usr/bin/python3');else fail('python not found')}
+      else if(t==='pip'||t==='pip3'){if(env)o(envPrefix(S.active)+'/bin/'+t);else if(t==='pip3')o('/usr/bin/pip3');else fail('pip not found')}
+      else if(t==='conda')o(MF+'/condabin/conda');else if(t==='uv')o('/opt/homebrew/bin/uv');
+      else if(t==='jupyter'){if(env&&hasPkg(env,'ipykernel'))o(envPrefix(S.active)+'/bin/jupyter');else fail('jupyter not found')}
+      else if(S.tools.includes(t))o(HOMEABS+'/.local/bin/'+t);else fail(`${t} not found`)}
+    if(env&&a.some(x=>x.startsWith('python')))n(`Le chemin contient <code>envs/${S.active}</code> : tu es bien dans l'env ${S.active}.`);
+    else if(S.active==='base')n('Tu es dans base : n\'installe rien ici.','warn');
+    break;
+
+  case 'python':case 'python3':{
+    if(!env&&cmd==='python'){fail('zsh: command not found: python');n('Normal : aucun env n\'est actif, et macOS ne fournit que <code>python3</code>. Active l\'env du projet, ou utilise <code>uv run python</code> dans un projet uv.');break}
+    const py=env?envPrefix(S.active)+'/bin/python':'/usr/bin/python3';
+    if(a[0]==='--version'||a[0]==='-V'){o('Python '+(env?fullPy(env.python):'3.9.6'));break}
+    if(a[0]==='-m'){const mod=a[1],rest=a.slice(2);
+      if(mod==='pip'){pipCmd(cmd+' -m pip',rest);break}
+      if(mod==='ipykernel'){
+        if(rest[0]!=='install'){fail(`usage: python -m ipykernel install --user --name NOM`);break}
+        if(!env||!hasPkg(env,'ipykernel')){fail(`${py}: No module named ipykernel`);n(!env?'Aucun env n\'est actif : active d\'abord l\'env du projet.':S.active==='base'?'base n\'a pas (et ne doit pas avoir) ipykernel. Active l\'env du projet.':`Installe-le dans l'env : <code>conda install ipykernel -y</code>.`);break}
+        let name='python3',disp=null;for(let i=0;i<rest.length;i++){if(rest[i]==='--name')name=rest[++i];else if(rest[i]==='--display-name')disp=rest[++i]}
+        if(!rest.includes('--user'))n('Ajoute <code>--user</code> : le kernel s\'enregistre dans ton dossier, visible par tous tes envs.','warn');
+        S.kernels[name]={display:disp||name,env:S.active};
+        o(`Installed kernelspec ${name} in ${HOMEABS}/Library/Jupyter/kernels/${name}`);
+        if(name==='python3')n('Sans <code>--name</code>, le kernel s\'appelle « python3 » et se confond avec le kernel générique. Donne-lui le nom du projet.','warn');
+        else if(name!==S.active)n(`Le kernel s'appelle « ${name} » mais l'env « ${S.active} ». Garde le même nom pour t'y retrouver.`,'warn');
+        else if(!disp)n('Ajoute <code>--display-name "Python (…)"</code> pour un nom lisible dans le menu Select Kernel.');
+        break}
+      if(mod==='venv'){n('Ça marche, mais sur ce Mac on crée les venvs avec <code>uv venv --managed-python</code> (ou <code>uv init</code> + <code>uv add</code>).','tip');break}
+      fail(`${py}: No module named ${mod}`);break}
+    if(!a.length){o('(Le REPL Python interactif n\'est pas simulé.)','dim');break}
+    const f=resolve(a[0]);
+    if(!f||S.files[f]===undefined){fail(`${py}: can't open file '${abs(f||a[0])}': [Errno 2] No such file or directory`);break}
+    const m=(S.files[f].match(/print\("([^"]*)"\)/)||[])[1];if(m!==undefined)o(m);
+    if(findUv(S.cwd))n('Dans un projet uv, lance plutôt <code>uv run python '+a[0]+'</code> : il utilise le .venv et les dépendances du projet.');
+    break}
+
+  case 'pip':case 'pip3':pipCmd(cmd,a);break;
+
+  case 'jupyter':{
+    if(!env||!hasPkg(env,'ipykernel')){fail('zsh: command not found: jupyter');n('<code>jupyter</code> n\'existe que dans un env qui contient ipykernel. Active par exemple <code>conda activate certif</code>.');break}
+    if(a[0]==='kernelspec'){
+      if(a[1]==='list'){o('Available kernels:');Object.entries(S.kernels).forEach(([k])=>o(`  ${k.padEnd(18)} ${HOMEABS}/Library/Jupyter/kernels/${k}`));o(`  ${'python3'.padEnd(18)} ${envPrefix(S.active)}/share/jupyter/kernels/python3`);break}
+      if(a[1]==='uninstall'||a[1]==='remove'){const names=a.slice(2).filter(x=>!x.startsWith('-'));const y=a.includes('-y')||a.includes('-f');if(!names.length){fail('usage: jupyter kernelspec uninstall NOM');break}
+        for(const k of names){if(!S.kernels[k]){fail(`Couldn't find kernel spec(s): ${k}`);break}if(!y)o(`Remove 1 kernel specs [y/N]: y   ← simulé : ajoute -y pour ne pas avoir à confirmer`,'dim');delete S.kernels[k];o(`[RemoveKernelSpec] Removed ${HOMEABS}/Library/Jupyter/kernels/${k}`)}break}
+      fail(`usage: jupyter kernelspec list | uninstall NOM`);break}
+    if(a[0]==='lab'||a[0]==='notebook'){o('[I ServerApp] Jupyter Server démarré','dim');o('Kernels disponibles : '+Object.values(S.kernels).map(k=>k.display).join(', '),'dim');n('(Le navigateur s\'ouvrirait ici.) Dans VS Code, c\'est le menu <b>Select Kernel</b> qui liste ces mêmes kernels.');break}
+    fail(`jupyter: '${a[0]||''}' n'est pas simulé`);break}
+
+  case 'conda':{
+    const sub=a[0],r=a.slice(1);
+    const getOpt=(arr,...k)=>{for(let i=0;i<arr.length;i++)if(k.includes(arr[i]))return arr[i+1];return null};
+    const specsOf=arr=>{const out=[];for(let i=0;i<arr.length;i++){if(['-n','--name','-c','--channel','-f','--file','--clone','-p','--prefix'].includes(arr[i])){i++;continue}if(arr[i].startsWith('-'))continue;out.push(arr[i])}return out};
+    const yes=r.includes('-y')||r.includes('--yes');
+    const solving=()=>{o('Channels:','dim');o(' - conda-forge','dim');o('Platform: osx-arm64','dim');o('Collecting package metadata (repodata.json): done','dim');o('Solving environment: done','dim')};
+    const proceed=()=>{if(!yes)o('Proceed ([y]/n)? y   ← simulé : ajoute -y pour ne pas avoir à confirmer','dim')};
+    const removeEnv=name=>{
+      if(!name){fail('CondaValueError: no environment specified (-n NOM)');return}
+      if(name==='base'){fail('CondaEnvironmentError: cannot remove root environment');return}
+      if(!S.envs[name]){fail(`EnvironmentLocationNotFound: Not a conda environment: ${envPrefix(name)}`);return}
+      if(S.active===name){fail('CondaEnvironmentError: Cannot remove current environment. Deactivate and run conda remove again');n('Fais d\'abord <code>conda deactivate</code>.');return}
+      o(`Remove all packages in environment ${envPrefix(name)}:`,'dim');proceed();delete S.envs[name];o('Everything found within the environment ('+envPrefix(name)+'), including any conda environment configurations and any non-conda files, will be deleted.','dim');o('Environment removed.','ok');
+      if(S.kernels[name])n(`Le kernel Jupyter « ${name} » pointe maintenant vers un env supprimé. Retire-le : <code>jupyter kernelspec uninstall ${name} -y</code> (depuis un env qui a jupyter, par exemple certif).`,'warn');
+    };
+    const envList=()=>{o('# conda environments:');o('#');o('# * -> active');Object.keys(S.envs).forEach(k=>o(`${k.padEnd(20)} ${S.active===k?'*':' '}  ${envPrefix(k)}`))};
+    switch(sub){
+    case '--version':case '-V':o('conda 26.7.2');break;
+    case 'init':o('no change     '+MF+'/condabin/conda','dim');n('Déjà fait sur ce Mac : rien à refaire.');break;
+    case 'info':if(r.includes('--envs')||r.includes('-e')){envList();break}o(`     active environment : ${S.active||'None'}`);if(S.active)o(`    active env location : ${envPrefix(S.active)}`);o(`       base environment : ${MF}`);o('          conda version : 26.7.2');o('           channel URLs : https://conda.anaconda.org/conda-forge/osx-arm64');break;
+    case 'config':if(r.includes('--show')){o('auto_activate: False');o('channels:');o('  - conda-forge')}else if(r.includes('--set'))o('(réglage enregistré dans ~/.condarc)','dim');else fail('usage: conda config --show | --set CLÉ VALEUR');break;
+    case 'search':{const p=specsOf(r)[0];if(!p){fail('usage: conda search PAQUET');break}o('Loading channels: done','dim');o('# Name                       Version           Build  Channel');o(`${pkgName(p).padEnd(28)} ${ver(pkgName(p)).padEnd(17)} py312  conda-forge`);n('Le paquet existe sur conda-forge : installe-le avec <code>conda install</code> plutôt qu\'avec pip.');break}
+    case 'activate':{const name=r[0]||'base';if(!S.envs[name]){fail(`EnvironmentNameNotFound: Could not find conda environment: ${name}`);n('Vérifie le nom avec <code>conda env list</code>.','dim');break}S.active=name;if(name==='base')n('Tu es dans base. Rien à installer ici : base sert seulement à faire tourner conda.','warn');break}
+    case 'deactivate':S.active=null;break;
+    case 'create':{
+      const name=getOpt(r,'-n','--name');const clone=getOpt(r,'--clone');let py=null;const specs=[];
+      for(const sp of specsOf(r)){if(pkgName(sp)==='python')py=(sp.match(/(\d+\.\d+)/)||[])[1]||null;else specs.push(sp)}
+      if(!name){fail('CondaValueError: one of --name or --prefix arguments must be provided');n('Il manque le nom : <code>conda create -n nom_du_projet python=3.12 -y</code>.','dim');break}
+      if(name==='base'){fail('CondaValueError: \'base\' is a reserved environment name');break}
+      if(S.envs[name]){fail(`CondaValueError: prefix already exists: ${envPrefix(name)}`);n(`L'env existe déjà. <code>conda activate ${name}</code> pour l'utiliser, ou <code>conda env remove -n ${name} -y</code> pour repartir de zéro.`,'dim');break}
+      if(clone&&!S.envs[clone]){fail(`CondaValueError: cannot clone from nonexistent environment: ${clone}`);break}
+      solving();o('');o('## Package Plan ##');o(`  environment location: ${envPrefix(name)}`);o('  added / updated specs:');o(`    - python=${py||'3.14'}`);specs.forEach(s=>o('    - '+s));o('');proceed();o('Preparing transaction: done','dim');o('Verifying transaction: done','dim');o('Executing transaction: done','dim');o('#');o('# To activate this environment, use');o('#');o(`#     $ conda activate ${name}`);o('#');o('# To deactivate an active environment, use');o('#');o('#     $ conda deactivate');
+      S.envs[name]=clone?JSON.parse(JSON.stringify(S.envs[clone])):mkEnv(py||'3.14',!!py,['python',...specs]);
+      if(!py&&!clone)n('Précise toujours la version de Python, par exemple <code>python=3.12</code>. Sinon conda prend la plus récente (3.14 ici), que certaines librairies ne supportent pas encore.','warn');
+      if(clone==='base')mistake('Cloner base recopie tout son contenu, y compris ce qui n\'aurait jamais dû y être. Crée plutôt un env vide et installe seulement ce dont le projet a besoin.');
+      break}
+    case 'install':case 'update':case 'upgrade':{
+      const target=getOpt(r,'-n','--name')||S.active||'base';const e=S.envs[target];
+      if(!e){fail(`EnvironmentLocationNotFound: Not a conda environment: ${envPrefix(target)}`);break}
+      let specs=specsOf(r);
+      if(sub!=='install'&&specs.length===0&&r.includes('--all'))specs=e.conda.filter(x=>pkgName(x)!=='python');
+      if(!specs.length){fail('CondaValueError: too few arguments, must supply command line package specs or --file');break}
+      const onlyConda=specs.every(s=>['conda','mamba'].includes(pkgName(s)));
+      if(sub!=='install'&&specs.every(s=>hasPkg(e,s))&&!(target==='base'&&!onlyConda)){solving();o('# All requested packages already installed.');if(target==='base'&&onlyConda)n('C\'est la seule opération légitime dans base : mettre conda à jour.');break}
+      solving();o('');o('## Package Plan ##');o(`  environment location: ${envPrefix(target)}`);o('  added / updated specs:');specs.forEach(s=>o('    - '+s));o('');o('The following NEW packages will be INSTALLED:');specs.forEach(s=>{const p=pkgName(s);o(`  ${p.padEnd(18)} conda-forge/osx-arm64::${p}-${p==='python'?fullPy((s.match(/(\d+\.\d+)/)||[])[1]||e.python):ver(p)}`)});o('');proceed();o('Preparing transaction: done','dim');o('Verifying transaction: done','dim');o('Executing transaction: done','dim');
+      specs.forEach(s=>{if(pkgName(s)==='python'){const v=(s.match(/(\d+\.\d+)/)||[])[1];if(v){e.python=v;e.pyExplicit=true}}else{addSpec(e.conda,s);delSpec(e.pip,s)}});
+      if(target==='base'&&!onlyConda){
+        const how=S.active==='base'?'Tu étais dans base (<code>(base)</code> dans le prompt).':!S.active?'Aucun env n\'était actif, et dans ce cas conda installe dans base par défaut.':`Le <code>-n base</code> envoie l'installation dans base.`;
+        mistake(`${specs.map(pkgName).join(', ')} vient d'être installé dans <b>base</b>. ${how} Pour annuler : <code>conda remove -n base ${specs.map(pkgName).join(' ')} -y</code>, puis <code>conda activate &lt;projet&gt;</code> et réinstalle-le là.`)}
+      else if(target!=='base'){
+        const yf=resolve('environment.yml');if(S.files[yf]&&parseYml(S.files[yf]).name===target)n('Pense à mettre à jour la recette : <code>conda env export --from-history | grep -v "^prefix" &gt; environment.yml</code>.');
+        if(!getOpt(r,'-n','--name')&&S.active===target)n(`Installé dans <b>${target}</b>, l'env actif.`,'tip')}
+      break}
+    case 'remove':case 'uninstall':{
+      if(r.includes('--all')){removeEnv(getOpt(r,'-n','--name')||S.active);break}
+      const target=getOpt(r,'-n','--name')||S.active||'base';const e=S.envs[target];
+      if(!e){fail(`EnvironmentLocationNotFound: Not a conda environment: ${envPrefix(target)}`);break}
+      const specs=specsOf(r);if(!specs.length){fail('CondaValueError: no package names supplied');break}
+      const missing=specs.filter(s=>!e.conda.some(x=>pkgName(x)===pkgName(s)));
+      if(missing.length){fail('PackagesNotFoundError: The following packages are missing from the target environment:\n  - '+missing.join('\n  - '));if(missing.some(m=>e.pip.some(x=>pkgName(x)===pkgName(m))))n('Ce paquet a été installé avec pip : retire-le avec <code>python -m pip uninstall NOM -y</code>.','dim');break}
+      if(specs.some(s=>['conda','python','pip'].includes(pkgName(s)))&&target==='base'){fail('CondaValueError: refusing to remove conda/python from base');break}
+      solving();o('## Package Plan ##');o(`  environment location: ${envPrefix(target)}`);o('  removed specs:');specs.forEach(s=>o('    - '+s));proceed();o('Executing transaction: done','dim');specs.forEach(s=>delSpec(e.conda,s));
+      if(target==='base')n('base retrouve son état propre.','tip');
+      break}
+    case 'list':{const target=getOpt(r,'-n','--name')||S.active||'base';const e=S.envs[target];if(!e){fail(`EnvironmentLocationNotFound: Not a conda environment: ${envPrefix(target)}`);break}
+      o(`# packages in environment at ${envPrefix(target)}:`);o('#');o('# Name                    Version          Build            Channel');
+      [...e.conda.map(x=>[pkgName(x),'conda-forge']),...e.pip.map(x=>[pkgName(x),'pypi'])].sort((x,y)=>x[0].localeCompare(y[0])).forEach(([p,ch])=>o(`${p.padEnd(25)} ${(p==='python'?fullPy(e.python):ver(p)).padEnd(16)} ${ch==='pypi'?'pypi_0':'py312h_0'}         ${ch}`));
+      if(!S.active&&!getOpt(r,'-n','--name'))n('Aucun env actif : c\'est le contenu de base qui s\'affiche.','dim');break}
+    case 'clean':{if(!(r.includes('--all')||r.includes('-a'))){fail('usage: conda clean --all -y');break}if(!S.cache){o('There are no unused tarball(s) to remove.','dim');o('There are no unused package(s) to remove.','dim');break}o(`Will remove 312 (${Math.round(S.cache*.4)} MB) tarball(s).`);o(`Will remove 1 index cache(s).`);o(`Will remove 58 (${Math.round(S.cache*.6)} MB) package(s).`);proceed();o(`Files removed: 3104 (${S.cache} MB)`,'ok');S.cache=0;break}
+    case 'env':{
+      const s2=r[0],rr=r.slice(1);
+      if(s2==='list'){envList();break}
+      if(s2==='remove'){removeEnv(getOpt(rr,'-n','--name'));break}
+      if(s2==='export'){
+        const target=getOpt(rr,'-n','--name')||S.active||'base';const e=S.envs[target];if(!e){fail(`EnvironmentLocationNotFound: Not a conda environment: ${envPrefix(target)}`);break}
+        const fh=rr.includes('--from-history');const lines=[`name: ${target}`,'channels:','  - conda-forge','dependencies:',`  - python=${fh?e.python:fullPy(e.python)}`];
+        e.conda.filter(x=>pkgName(x)!=='python').forEach(x=>lines.push(fh?`  - ${x}`:`  - ${pkgName(x)}=${ver(pkgName(x))}=py312h_0`));
+        if(e.pip.length){lines.push('  - pip');lines.push('  - pip:');e.pip.forEach(x=>lines.push(`    - ${pkgName(x)}==${ver(pkgName(x))}`))}
+        lines.push(`prefix: ${envPrefix(target)}`);
+        const f=getOpt(rr,'-f','--file');
+        if(f){const p=resolve(f);S.files[p]=lines.filter(l=>!l.startsWith('prefix')).join('\n')+'\n';o(`(écrit dans ${f})`,'dim')}else lines.forEach(l=>o(l));
+        if(!fh)n('Sans <code>--from-history</code>, la recette fige des versions et des builds propres au Mac : elle échouera souvent sur Linux ou Windows. Avec, tu n\'as que ce que tu as demandé.','warn');
+        if(!S.active&&!getOpt(rr,'-n','--name'))n('Aucun env actif : c\'est base qui a été exporté. Active d\'abord l\'env du projet.','warn');
+        break}
+      if(s2==='create'){
+        const f=getOpt(rr,'-f','--file')||'environment.yml';const p=resolve(f);
+        if(!p||S.files[p]===undefined){fail(`EnvironmentFileNotFound: '${abs(p||f)}' file not found`);n('Vérifie que tu es dans le dossier du projet (<code>ls</code>).','dim');break}
+        const y=parseYml(S.files[p]);const name=getOpt(rr,'-n','--name')||y.name;
+        if(!name){fail('CondaValueError: the environment file has no name: use -n NOM');break}
+        if(S.envs[name]){fail(`CondaValueError: prefix already exists: ${envPrefix(name)}`);break}
+        solving();if(y.pip.length){o('Installing pip dependencies: ...working... done','dim')}o('Preparing transaction: done','dim');o('Verifying transaction: done','dim');o('Executing transaction: done','dim');o('#');o('# To activate this environment, use');o('#');o(`#     $ conda activate ${name}`);
+        S.envs[name]=mkEnv(y.python||'3.14',!!y.python,['python',...y.deps],y.pip.map(pkgName));
+        break}
+      fail(`conda env: '${s2||''}' n'est pas simulé (list, export, create, remove)`);break}
+    default:fail(`conda: '${sub||''}' n'est pas simulé. Tape help.`);
+    }
+    break}
+
+  case 'uv':{
+    const sub=a[0],r=a.slice(1);
+    const getOpt=(k)=>{const i=r.indexOf(k);return i>=0?r[i+1]:null};
+    const managed=r.includes('--managed-python');
+    const pos=()=>{const out=[];for(let i=0;i<r.length;i++){if(['--python','-p','--name'].includes(r[i])){i++;continue}if(r[i].startsWith('-'))continue;out.push(r[i])}return out};
+    const makeVenv=pr=>{
+      if(pr.venv)return;
+      const ce=S.active?S.envs[S.active]:null;
+      if(ce&&!managed&&cmpVer(ce.python,pr.python)>=0){o(`Using CPython ${fullPy(ce.python)} interpreter at: ${envPrefix(S.active)}/bin/python3`);pr.venvFromConda=S.active;
+        mistake(`L'env conda « ${S.active} » est actif : uv a pris <b>son</b> Python pour construire le .venv. Le projet dépend maintenant de conda et cassera si cet env disparaît. C'est le piège qu'on a eu sur BrocAI. Corrige : <code>conda deactivate</code>, <code>rm -rf .venv</code>, puis relance (ou ajoute <code>--managed-python</code>).`)}
+      else{o(`Using CPython ${fullPy(pr.python)}`);if(ce&&!managed)n(`L'env conda « ${S.active} » est actif, mais son Python (${ce.python}) est trop ancien pour ce projet, donc uv l'a ignoré. Avec un env conda plus récent, il l'aurait pris : garde le réflexe <code>conda deactivate</code>.`,'warn')}
+      o('Creating virtual environment at: .venv');pr.venv=true;S.dirs.add(pr.dir+'/.venv');
+    };
+    const needProj=()=>{const pr=findUv(S.cwd);if(!pr){fail('error: No `pyproject.toml` found in current directory or any parent directory');n('Va dans le dossier du projet, ou crée-le avec <code>uv init</code>.','dim')}return pr};
+    switch(sub){
+    case '--version':o('uv 0.9.4 (Homebrew)');break;
+    case 'init':{
+      const nm=pos()[0];const dir=nm?resolve(nm):S.cwd;if(!dir){fail('error: chemin hors du dossier personnel (non simulé)');break}
+      if(S.uv[dir]||S.files[dir+'/pyproject.toml']!==undefined){fail(`error: Project is already initialized in \`${abs(dir)}\` (\`pyproject.toml\` file exists)`);break}
+      if(dir==='~'||['~/Desktop','~/Developer','~/Documents','~/Desktop/Projets_IA'].includes(dir)){mistake(`<code>uv init</code> ici transforme <b>${dir}</b> entier en projet Python : un pyproject.toml et un .venv au milieu de tous tes dossiers. Crée d'abord un dossier dédié : <code>mkdir mon_app &amp;&amp; cd mon_app</code>. Pour annuler : <code>rm pyproject.toml .python-version main.py</code>.`)}
+      if(nm&&!S.dirs.has(dir)){if(!S.dirs.has(parent(dir))){fail(`error: Failed to create directory \`${abs(dir)}\``);break}S.dirs.add(dir)}
+      let py=getOpt('--python')||getOpt('-p');const ce=S.active?S.envs[S.active]:null;
+      if(!py){py=ce?ce.python:'3.13';if(ce)n(`Sans <code>--python</code>, uv a choisi ${py}, la version de l'env conda actif « ${S.active} ». Précise-la toujours.`,'warn')}
+      py=(py.match(/(\d+\.\d+)/)||[])[1]||py;
+      const pr={dir,python:py,deps:[],dev:[],venv:false,venvFromConda:null,lock:false};S.uv[dir]=pr;
+      writePyproject(pr);S.files[dir+'/.python-version']=py+'\n';S.files[dir+'/main.py']=`def main():\n    print("Hello from ${base(dir).replace(/_/g,'-').toLowerCase()}!")\n\n\nif __name__ == "__main__":\n    main()\n`;S.files[dir+'/README.md']='';S.files[dir+'/.gitignore']='.venv/\n__pycache__/\n';
+      o(`Initialized project \`${base(dir).replace(/_/g,'-').toLowerCase()}\``+(nm?` at \`${abs(dir)}\``:''));
+      n('Pas encore de .venv : uv le crée au premier <code>uv add</code>, <code>uv sync</code> ou <code>uv run</code>.','tip');
+      break}
+    case 'add':{const pr=needProj();if(!pr)break;const dev=r.includes('--dev');const pk=pos();if(!pk.length){fail('error: the following required arguments were not provided:\n  <PACKAGES|--requirements <REQUIREMENTS>>');break}
+      makeVenv(pr);const names=pk.map(pkgName);names.forEach(x=>{const arr=dev?pr.dev:pr.deps;if(!arr.includes(x))arr.push(x)});pr.lock=true;S.files[pr.dir+'/uv.lock']='version = 1\n';writePyproject(pr);
+      const tot=pr.deps.length+pr.dev.length;o(`Resolved ${tot*4+2} packages in 284ms`,'dim');o(`Prepared ${names.length*4} packages in 612ms`,'dim');o(`Installed ${names.length*4} packages in 31ms`,'dim');names.forEach(x=>o(` + ${x}==${ver(x)}`,'ok'));break}
+    case 'remove':{const pr=needProj();if(!pr)break;pos().map(pkgName).forEach(x=>{pr.deps=pr.deps.filter(d=>d!==x);pr.dev=pr.dev.filter(d=>d!==x);o(` - ${x}==${ver(x)}`)});writePyproject(pr);break}
+    case 'sync':case 'lock':{const pr=needProj();if(!pr)break;if(sub==='sync')makeVenv(pr);pr.lock=true;S.files[pr.dir+'/uv.lock']='version = 1\n';o(`Resolved ${(pr.deps.length+pr.dev.length)*4+1} packages in 12ms`,'dim');if(sub==='sync')o(pr.deps.length?`Audited ${pr.deps.length*4} packages in 2ms`:'Audited in 0.01ms','dim');break}
+    case 'run':{const rest=a.slice(1).filter(x=>x!=='--managed-python');const pr=findUv(S.cwd);
+      if(!pr){fail('error: aucun projet uv ici');n('<code>uv run</code> s\'utilise dans le dossier d\'un projet uv (là où se trouve pyproject.toml).','dim');break}
+      makeVenv(pr);if(pr.lock===false){pr.lock=true;S.files[pr.dir+'/uv.lock']='version = 1\n'}
+      if(!rest.length){fail('error: commande manquante, par exemple uv run python main.py');break}
+      if(rest[0]==='which'){o(abs(pr.dir)+'/.venv/bin/python');break}
+      if(rest[0]==='python'||rest[0]==='python3'){if(rest[1]==='--version'||rest[1]==='-V'){o('Python '+fullPy(pr.venvFromConda?S.envs[pr.venvFromConda]?.python||pr.python:pr.python));break}
+        if(!rest[1]){o('(Le REPL Python interactif n\'est pas simulé.)','dim');break}
+        const f=resolve(rest[1]);if(!f||S.files[f]===undefined){fail(`error: Failed to spawn: can't open file '${abs(f||rest[1])}'`);break}
+        const m=(S.files[f].match(/print\("([^"]*)"\)/)||[])[1];if(m!==undefined)o(m);S.ran[f]=true;break}
+      if(rest[0]==='pytest'){if(!pr.dev.includes('pytest')&&!pr.deps.includes('pytest')){fail('error: Failed to spawn: `pytest`\n  Caused by: No such file or directory');n('Ajoute-le : <code>uv add --dev pytest</code>.','dim');break}o('no tests ran in 0.01s','dim');break}
+      if(rest[0]==='uvicorn'||rest[0]==='fastapi'){o('INFO:     Uvicorn running on http://127.0.0.1:8000 (simulé)','dim');break}
+      o(`(${rest.join(' ')} lancé dans le .venv du projet)`,'dim');break}
+    case 'venv':{const dir=S.cwd;const py=getOpt('--python')||getOpt('-p');const pr=S.uv[dir]||{dir,python:(py||'3.13').match(/(\d+\.\d+)/)?.[1]||'3.13',venv:false,deps:[],dev:[]};
+      if(S.uv[dir]&&pr.venv){o('Using CPython '+fullPy(pr.python));o('Creating virtual environment at: .venv');n('Le .venv existait déjà : il vient d\'être recréé.','dim');break}
+      if(!S.uv[dir]&&S.dirs.has(dir+'/.venv')){fail('error: .venv existe déjà ici');break}
+      if(dir==='~')mistake('Un .venv directement dans ton dossier personnel ne sert aucun projet en particulier. Crée-le dans le dossier du projet.');
+      makeVenv(pr);o('Activate with: source .venv/bin/activate','dim');break}
+    case 'pip':{if(r[0]!=='install'){fail('uv pip : seul « install » est simulé');break}if(!S.dirs.has(S.cwd+'/.venv')){fail('error: No virtual environment found; run `uv venv` to create an environment, or pass `--system` to install into a non-virtual environment');break}
+      const pk=r.slice(1).filter(x=>!x.startsWith('-')).map(pkgName);o(`Resolved ${pk.length*3} packages in 120ms`,'dim');pk.forEach(x=>o(` + ${x}==${ver(x)}`,'ok'));if(S.uv[S.cwd])n('Dans un projet uv, <code>uv add</code> est mieux : la dépendance est notée dans pyproject.toml et uv.lock, donc recréable.');break}
+    case 'cache':{if(r[0]==='prune'||r[0]==='clean'){if(!S.uvCache)o('No cache found','dim');else o(`Removed 10360 files (${S.uvCache}MiB)`,'ok');S.uvCache=0}else fail('usage: uv cache prune');break}
+    case 'tool':{if(r[0]==='list'){S.tools.forEach(t=>{o(`${t} v0.1.0`);o(`- ${t}`)});break}if(r[0]==='install'){const t=r.slice(1).filter(x=>!x.startsWith('-'))[0];let nm=t;if(t==='.'){const pr=findUv(S.cwd);nm=pr?base(pr.dir).replace(/_/g,'-').toLowerCase():null}if(!nm){fail('error: rien à installer ici (pas de pyproject.toml)');break}if(!S.tools.includes(nm))S.tools.push(nm);o(`Installed 1 executable: ${nm}`,'ok');n(`<code>${nm}</code> a son propre environnement isolé et reste disponible partout via ~/.local/bin.`);break}fail('usage: uv tool install | list');break}
+    case 'python':{if(r[0]==='list'){o('cpython-3.13.15-macos-aarch64-none    .local/share/uv/python/cpython-3.13…');o('cpython-3.12.14-macos-aarch64-none    .local/share/uv/python/cpython-3.12…');o('cpython-3.9.6-macos-aarch64-none      /usr/bin/python3')}else fail('usage: uv python list');break}
+    default:fail(`error: unrecognized subcommand '${sub||''}'`);
+    }
+    break}
+
+  default:fail(`zsh: command not found: ${cmd}`);
+  }
+  return R;
+}
+
+/* ---------- Missions ---------- */
+const P='~/Desktop/Projets_IA';
+const MISSIONS=[
+ {id:'conda-new',title:'Démarrer un projet notebook',tool:'conda',
+  brief:'Tu commences une analyse météo dans <code>~/Desktop/Projets_IA</code>. Crée le dossier et l\'env du projet, rends l\'env visible dans Jupyter, puis sauvegarde la recette.',
+  setup:()=>{},
+  steps:[
+   {l:'Créer le dossier <code>projet_meteo</code> et y entrer',h:`mkdir ${P}/projet_meteo && cd ${P}/projet_meteo`,c:s=>s.cwd===P+'/projet_meteo'},
+   {l:'Créer l\'env <code>projet_meteo</code> en précisant Python 3.12',h:'conda create -n projet_meteo python=3.12 -y',c:s=>s.envs.projet_meteo&&s.envs.projet_meteo.pyExplicit},
+   {l:'Activer l\'env',h:'conda activate projet_meteo',c:s=>s.active==='projet_meteo'},
+   {l:'Installer pandas, plotly et ipykernel avec conda',h:'conda install pandas plotly ipykernel -y',c:s=>{const e=s.envs.projet_meteo;return e&&['pandas','plotly','ipykernel'].every(p=>e.conda.some(x=>pkgName(x)===p))}},
+   {l:'Enregistrer le kernel Jupyter',h:'python -m ipykernel install --user --name projet_meteo --display-name "Python (projet_meteo)"',c:s=>!!s.kernels.projet_meteo},
+   {l:'Sauvegarder <code>environment.yml</code> dans le dossier',h:'conda env export --from-history | grep -v "^prefix" > environment.yml',c:s=>{const f=s.files[P+'/projet_meteo/environment.yml'];return !!f&&/pandas/.test(f)&&!/^prefix/m.test(f)}},
+  ]},
+ {id:'conda-add',title:'Ajouter une librairie en cours de route',tool:'conda',
+  brief:'Ton notebook de certif a besoin de <code>lightgbm</code>. Tu viens d\'ouvrir le terminal dans le dossier de la certif, et aucun env n\'est actif. Attention au réflexe <code>pip install</code>.',
+  setup:s=>{s.cwd=P+'/Projets_certif'},
+  steps:[
+   {l:'Activer l\'env <code>certif</code>',h:'conda activate certif',c:s=>s.active==='certif'},
+   {l:'Installer lightgbm dans certif avec conda',h:'conda install lightgbm -y',c:s=>s.envs.certif&&s.envs.certif.conda.some(x=>pkgName(x)==='lightgbm')},
+   {l:'Mettre à jour <code>environment.yml</code>',h:'conda env export --from-history | grep -v "^prefix" > environment.yml',c:s=>{const f=s.files[P+'/Projets_certif/environment.yml'];return !!f&&/lightgbm/.test(f)&&!/^prefix/m.test(f)}},
+  ]},
+ {id:'uv-new',title:'Démarrer une app avec uv',tool:'uv',
+  brief:'Tu crées une petite API météo dans <code>~/Developer</code>. Un env conda de test (<code>essai</code>, Python 3.13) est resté actif dans ce terminal : c\'est le piège qu\'on a eu avec BrocAI.',
+  setup:s=>{s.envs.essai=mkEnv('3.13',true,['python','requests']);s.active='essai'},
+  steps:[
+   {l:'Désactiver l\'env conda resté actif',h:'conda deactivate',c:s=>s.active===null},
+   {l:'Créer <code>~/Developer/meteo_api</code> et y entrer',h:'mkdir ~/Developer/meteo_api && cd ~/Developer/meteo_api',c:s=>s.cwd==='~/Developer/meteo_api'},
+   {l:'Initialiser le projet uv avec Python 3.13',h:'uv init --python 3.13',c:s=>!!s.uv['~/Developer/meteo_api']},
+   {l:'Ajouter fastapi et requests',h:'uv add fastapi requests',c:s=>{const p=s.uv['~/Developer/meteo_api'];return !!p&&p.deps.includes('fastapi')&&p.deps.includes('requests')}},
+   {l:'Lancer <code>main.py</code> dans le .venv du projet',h:'uv run python main.py',c:s=>!!s.ran['~/Developer/meteo_api/main.py']},
+  ]},
+ {id:'conda-recreate',title:'Recréer un projet récupéré',tool:'conda',
+  brief:'Tu récupères un projet (d\'un formateur, d\'un camarade, ou un de tes anciens projets) avec son <code>environment.yml</code>. Recrée l\'env à l\'identique, sans rien installer à la main.',
+  setup:s=>{const d=P+'/projet_recupere';s.dirs.add(d);s.files[d+'/environment.yml']=yml('projet_recupere','3.11',['pandas','scikit-learn','matplotlib','ipykernel'],['yfinance']);s.files[d+'/analyse.ipynb']='{}'},
+  steps:[
+   {l:'Aller dans le dossier <code>projet_recupere</code>',h:`cd ${P}/projet_recupere`,c:s=>s.cwd===P+'/projet_recupere'},
+   {l:'Lire la recette avant de l\'utiliser',h:'cat environment.yml',c:s=>!!s.catted[P+'/projet_recupere/environment.yml']},
+   {l:'Recréer l\'env depuis la recette',h:'conda env create -f environment.yml',c:s=>!!s.envs.projet_recupere},
+   {l:'Activer l\'env',h:'conda activate projet_recupere',c:s=>s.active==='projet_recupere'},
+   {l:'Enregistrer le kernel Jupyter',h:'python -m ipykernel install --user --name projet_recupere --display-name "Python (projet_recupere)"',c:s=>!!s.kernels.projet_recupere},
+  ]},
+ {id:'cleanup',title:'Fin de projet : faire le ménage',tool:'conda',
+  brief:'Le projet <code>vieux_projet</code> est terminé. Son env est encore actif. Supprime proprement l\'env et son kernel, sans perdre la possibilité de le recréer.',
+  setup:s=>{const d=P+'/vieux_projet';s.dirs.add(d);s.envs.vieux_projet=mkEnv('3.11',true,['python','pandas','plotly','ipykernel']);s.kernels.vieux_projet={display:'Python (vieux_projet)',env:'vieux_projet'};s.files[d+'/environment.yml']=yml('vieux_projet','3.11',['pandas','plotly','ipykernel']);s.active='vieux_projet';s.cwd=d;s.cache=2600},
+  steps:[
+   {l:'Vérifier que la recette existe',h:'cat environment.yml',c:s=>!!s.catted[P+'/vieux_projet/environment.yml']},
+   {l:'Supprimer le kernel Jupyter tant que l\'env est actif',h:'jupyter kernelspec uninstall vieux_projet -y',c:s=>!s.kernels.vieux_projet},
+   {l:'Désactiver l\'env',h:'conda deactivate',c:s=>s.active!=='vieux_projet'},
+   {l:'Supprimer l\'env',h:'conda env remove -n vieux_projet -y',c:s=>!s.envs.vieux_projet},
+   {l:'Vider les caches conda',h:'conda clean --all -y',c:s=>s.cache===0},
+  ]},
+ {id:'sandbox',title:'Bac à sable libre',tool:'libre',brief:'Le Mac simulé dans son état actuel : Miniforge, l\'env <code>certif</code>, aucun env actif. Essaie ce que tu veux, y compris les bêtises.',setup:()=>{},steps:[]},
+];
+if(typeof module!=='undefined')module.exports={baseState,runLine,MISSIONS,setS:s=>{S=s},getS:()=>S,BUS};
+</script>
+
+<script>
+/* ---------- Interface ---------- */
+(function(){
+if(typeof document==='undefined')return;
+const $=s=>document.querySelector(s);
+const out=$('#out'),input=$('#cmd'),promptEl=$('#prompt');
+let store={done:[],bad:0};
+try{const raw=localStorage.getItem('atelier-conda-v1');if(raw)store=Object.assign(store,JSON.parse(raw))}catch(e){}
+const save=()=>{try{localStorage.setItem('atelier-conda-v1',JSON.stringify(store))}catch(e){}};
+let M=null,done=new Set(),hint=false,hist=[],hi=0;
+BUS.mistake=()=>{store.bad++;save();scores()};
+
+function esc(t){return String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function promptParts(){const env=S.active;const dir=S.cwd==='~'?'~':base(S.cwd);return{env,txt:`nicolasbour@MacBook-Air ${dir} % `}}
+function renderPrompt(){const p=promptParts();promptEl.innerHTML=(p.env?`<span class="${p.env==='base'?'c-base':'c-env'}">(${esc(p.env)}) </span>`:'')+`<span class="c-prompt">${esc(p.txt)}</span>`}
+const LBL={mistake:'BÊTISE',tip:'ASTUCE',warn:'ATTENTION',mission:'MISSION'};
+function line(entry){
+  if(LBL[entry.c]){const d=document.createElement('div');d.className='coach '+entry.c;d.innerHTML=`<span class="lbl">${LBL[entry.c]}</span><span>${entry.t}</span>`;out.appendChild(d);return}
+  const d=document.createElement('div');d.className='l'+(entry.c?' c-'+entry.c:'');d.textContent=entry.t;out.appendChild(d);
+}
+function echo(cmd){const p=promptParts();const d=document.createElement('div');d.className='l';d.innerHTML=(p.env?`<span class="${p.env==='base'?'c-base':'c-env'}">(${esc(p.env)}) </span>`:'')+`<span class="c-prompt">${esc(p.txt)}</span><span class="c-cmd">${esc(cmd)}</span>`;out.appendChild(d)}
+const scroll=()=>{out.scrollTop=out.scrollHeight};
+
+function scores(){$('#sc-done').textContent=`${store.done.filter(id=>MISSIONS.some(m=>m.id===id&&m.steps.length)).length}/5`;$('#sc-bad').textContent=store.bad}
+
+function renderMissions(){
+  $('#missions').innerHTML=MISSIONS.map(m=>`<button type="button" class="mbtn" data-id="${m.id}" aria-current="${M&&M.id===m.id}"><span class="tag">${m.tool}</span><span class="t">${m.title}</span>${store.done.includes(m.id)?'<span class="tick">✓ réussie</span>':''}</button>`).join('');
+  $('#missions').querySelectorAll('.mbtn').forEach(b=>b.onclick=()=>start(b.dataset.id));
+}
+function nextIdx(){return M.steps.findIndex((_,i)=>!done.has(i))}
+function renderBrief(){
+  const ni=nextIdx();const complete=M.steps.length&&ni===-1;
+  let h=`<h3>${M.title}</h3><p>${M.brief}</p>`;
+  if(M.steps.length){
+    h+=`<ol class="steps">${M.steps.map((s,i)=>`<li class="${done.has(i)?'done':i===ni?'next':''}"><span>${s.l}</span></li>`).join('')}</ol>`;
+    if(complete)h+=`<div class="success"><b>Mission réussie.</b> ${M.bad?`${M.bad} bêtise${M.bad>1?'s':''} en route, sans dégât : relis les encadrés rouges dans le terminal.`:'Aucune bêtise. Tu peux la refaire sur ton vrai Mac.'}</div>`;
+    else{h+=`<div class="row"><button type="button" class="btn" id="hintBtn">${hint?'Masquer l\'indice':'Indice'}</button></div>`;
+      if(hint)h+=`<div class="hint"><span class="eyebrow">Commande attendue</span><code>${esc(M.steps[ni].h)}</code><div class="row"><button type="button" class="btn primary" id="useHint">Mettre dans le terminal</button></div></div>`}
+  }
+  $('#brief').innerHTML=h;
+  const hb=$('#hintBtn');if(hb)hb.onclick=()=>{hint=!hint;renderBrief()};
+  const uh=$('#useHint');if(uh)uh.onclick=()=>{input.value=M.steps[nextIdx()].h;input.focus()};
+}
+function renderState(){
+  const envs=Object.entries(S.envs).map(([k,e])=>{
+    const extra=k==='base'?[...e.conda.filter(x=>!BASE_ORIG.includes(pkgName(x))),...e.pip]:[];
+    const chips=k==='base'?(extra.length?extra.map(x=>`<span class="chip bad">${esc(pkgName(x))}</span>`).join(''):'<span class="empty">propre : conda, python, pip</span>'):[...e.conda.filter(x=>pkgName(x)!=='python').map(x=>`<span class="chip">${esc(pkgName(x))}</span>`),...e.pip.map(x=>`<span class="chip pip" title="installé avec pip">${esc(pkgName(x))}</span>`)].join('')||'<span class="empty">vide</span>';
+    return `<div class="env ${S.active===k?'active':''} ${extra.length?'dirty':''}"><div class="h"><b>${esc(k)}</b><small>Python ${e.python}</small>${S.active===k?'<span class="badge">actif</span>':''}${extra.length?'<span class="badge w">pollué</span>':''}</div><div class="chips">${chips}</div></div>`}).join('');
+  const kern=Object.entries(S.kernels).map(([k,v])=>{const orphan=!S.envs[v.env];return `<span class="chip ${orphan?'bad':''}" title="${orphan?'env supprimé':'env '+esc(v.env)}">${esc(v.display)}${orphan?' · orphelin':''}</span>`}).join('')||'<span class="empty">aucun</span>';
+  const uvs=Object.values(S.uv).map(p=>`<div class="env ${p.venvFromConda?'dirty':''}"><div class="h"><b>${esc(p.dir.replace(/^~\//,''))}</b><small>Python ${p.python}</small>${p.venv?`<span class="badge ${p.venvFromConda?'w':''}">${p.venvFromConda?'.venv sur conda':'.venv'}</span>`:''}</div><div class="chips">${[...p.deps.map(d=>`<span class="chip">${esc(d)}</span>`),...p.dev.map(d=>`<span class="chip pip" title="dépendance de dev">${esc(d)}</span>`)].join('')||'<span class="empty">aucune dépendance</span>'}</div></div>`).join('')||'<span class="empty">aucun projet uv créé dans cette session</span>';
+  const sys=S.systemPip.length?`<div class="env dirty"><div class="h"><b>Python de macOS</b><small>3.9.6</small><span class="badge w">pollué</span></div><div class="chips">${S.systemPip.map(x=>`<span class="chip bad">${esc(x)}</span>`).join('')}</div></div>`:'';
+  $('#state').innerHTML=`<div class="panel"><span class="eyebrow">Environnements conda</span><div class="envs">${envs}${sys}</div><span class="legend">Pointillés : installé avec pip. Rouge : n'aurait pas dû être là.</span></div>
+  <div class="panel"><span class="eyebrow">Projets uv</span><div class="envs">${uvs}</div><span class="eyebrow" style="margin-top:6px">Kernels Jupyter</span><div class="chips">${kern}</div><span class="eyebrow" style="margin-top:6px">Dossier courant</span><code style="word-break:break-all">${esc(abs(S.cwd))}</code></div>`;
+}
+function check(){
+  if(!M.steps.length)return;
+  M.steps.forEach((s,i)=>{try{if(!done.has(i)&&s.c(S)){done.add(i);hint=false}}catch(e){}});
+  if(nextIdx()===-1&&!M.completed){M.completed=true;if(!store.done.includes(M.id)){store.done.push(M.id);save()}line({c:'mission',t:`<b>Mission réussie : ${M.title}.</b> `+(M.bad?`${M.bad} bêtise${M.bad>1?'s':''} en route.`:'Sans aucune bêtise.')});renderMissions();scores()}
+}
+function start(id){
+  const def=MISSIONS.find(m=>m.id===id);S=baseState();def.setup(S);
+  M={...def,bad:0,completed:false};done=new Set();hint=false;
+  out.innerHTML='';
+  line({t:'Last login: Fri Oct 16 09:12:44 on ttys001',c:'dim'});
+  line({c:'mission',t:`<b>${def.title}</b> — ${def.brief}`});
+  if(S.active)line({t:`(l'env « ${S.active} » est déjà actif dans ce terminal)`,c:'dim'});
+  renderPrompt();renderMissions();renderBrief();renderState();scroll();
+  try{localStorage.setItem('atelier-conda-mission',id)}catch(e){}
+}
+const prevMistake=BUS.mistake;BUS.mistake=()=>{prevMistake();if(M)M.bad++};
+
+$('#form').addEventListener('submit',e=>{
+  e.preventDefault();const cmd=input.value;input.value='';
+  if(cmd.trim()){hist.push(cmd);hi=hist.length}
+  echo(cmd);
+  if(cmd.trim()){const r=runLine(cmd);if(r.clear)out.innerHTML='';r.lines.forEach(line)}
+  check();renderPrompt();renderBrief();renderState();scroll();
+});
+input.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'){if(hi>0){hi--;input.value=hist[hi]}e.preventDefault()}
+  else if(e.key==='ArrowDown'){if(hi<hist.length-1){hi++;input.value=hist[hi]}else{hi=hist.length;input.value=''}e.preventDefault()}
+  else if(e.key==='l'&&e.ctrlKey){out.innerHTML='';e.preventDefault()}
+});
+$('#out').addEventListener('click',()=>{if(!window.getSelection().toString())input.focus({preventScroll:true})});
+$('#reset').onclick=()=>start(M.id);
+
+/* Boutons du mémo */
+document.querySelectorAll('.cmd').forEach(row=>{
+  const txt=row.querySelector('code').textContent;
+  const acts=document.createElement('div');acts.className='acts';
+  acts.innerHTML='<button type="button">Essayer</button><button type="button">Copier</button>';
+  const [tryB,copyB]=acts.querySelectorAll('button');
+  tryB.onclick=()=>{input.value=txt;$('#term').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});input.focus({preventScroll:true})};
+  copyB.onclick=()=>{const ok=()=>{copyB.textContent='Copié';setTimeout(()=>copyB.textContent='Copier',1400)};
+    try{navigator.clipboard.writeText(txt).then(ok,()=>{selectText(row.querySelector('code'))})}catch(e){selectText(row.querySelector('code'))}};
+  row.appendChild(acts);
+});
+function selectText(el){const r=document.createRange();r.selectNodeContents(el);const s=window.getSelection();s.removeAllRanges();s.addRange(r)}
+
+let first='conda-new';try{const m=localStorage.getItem('atelier-conda-mission');if(m&&MISSIONS.some(x=>x.id===m))first=m}catch(e){}
+scores();start(first);
+})();
+</script>
+
+</body></html>
