@@ -188,7 +188,8 @@ math:not([display="block"]) { font-size: 1.12em; }
 
 .tabs-row { border-top: 1px solid var(--line-2); }
 .tabs-row .top__in { padding-block: 7px; }
-.tabs { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-bottom: 1px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.tab { font-family: var(--font-mono); font-size: 12.5px !important; padding: 5px 11px !important; }
 .tab {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 13px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--paper);
@@ -582,7 +583,7 @@ svg text.t-halo { paint-order: stroke; stroke: var(--paper); stroke-width: 4px; 
 <div class="app" id="app" data-view="models" data-model="ols" data-mode="essential">
   <header class="top" id="top">
     <div class="top__in">
-      <div class="brand">Cheatsheets GridSearch<small>Régression · scikit-learn et XGBoost</small></div>
+      <div class="brand">GridSearch · Régression<small>scikit-learn et XGBoost</small></div>
       <nav class="views" id="views" aria-label="Rubriques"></nav>
       <div class="top__tools">
         <div class="seg" role="group" aria-label="Niveau de lecture">
@@ -1011,7 +1012,7 @@ const ENET = {
    Random Forest
    -------------------------------------------------------------------------- */
 const RF = {
-  id: "rf", label: "Random Forest", short: "Forêt", lab: "rf", tree: true,
+  id: "rf", label: "Random Forest Regressor", short: "Forêt", lab: "rf", tree: true,
   cls: "RandomForestRegressor", module: "sklearn.ensemble",
   family: "Ensemble d'arbres · bagging", scope: "Non-linéarités · peu de préparation",
   tagline: "Des centaines d'arbres profonds entraînés sur des échantillons différents, dont on fait la moyenne : la variance fond, la précision reste.",
@@ -1149,7 +1150,7 @@ const RF = {
    XGBoost
    -------------------------------------------------------------------------- */
 const XGB = {
-  id: "xgb", label: "XGBoost", short: "XGBoost", lab: "gb", tree: true, xgb: true,
+  id: "xgb", label: "XGBoost Regressor", short: "XGBoost", lab: "gb", tree: true, xgb: true,
   cls: "XGBRegressor", module: "xgboost",
   family: "Gradient boosting · arbres", scope: "Données tabulaires · performance maximale",
   tagline: "Des arbres peu profonds ajoutés un par un, chacun corrigeant les erreurs des précédents. Régularisé, rapide, souvent imbattable sur tableaux.",
@@ -1330,7 +1331,7 @@ const XGB = {
    HistGradientBoosting
    -------------------------------------------------------------------------- */
 const HGB = {
-  id: "hgb", label: "HistGradientBoosting", short: "HistGB", lab: "gb", tree: true, hgb: true,
+  id: "hgb", label: "HistGradientBoosting Regressor", short: "HistGB", lab: "gb", tree: true, hgb: true,
   cls: "HistGradientBoostingRegressor", module: "sklearn.ensemble",
   family: "Gradient boosting · histogrammes", scope: "Gros volumes · NaN et catégories natifs",
   tagline: "Le boosting rapide de scikit-learn, inspiré de LightGBM : variables discrétisées en 255 bins, early stopping intégré.",
@@ -4106,7 +4107,7 @@ const VIZ = (() => {
     $$("button[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
     document.documentElement.style.setProperty("--top-h", $("#top").offsetHeight + "px");
   }
-  const tabBtn = (m) => '<button type="button" class="tab" role="tab" id="tab-' + m.id + '" data-m="' + m.id + '" aria-selected="' + (m.id === state.model) + '" tabindex="' + (m.id === state.model ? 0 : -1) + '">' + esc(m.label) + "</button>";
+  const tabBtn = (m) => '<button type="button" class="tab" role="tab" id="tab-' + m.id + '" data-m="' + m.id + '" aria-selected="' + (m.id === state.model) + '" tabindex="' + (m.id === state.model ? 0 : -1) + '" title="' + esc(m.label) + '">' + esc(m.cls) + "</button>";
   function render(scrollTo) {
     stopTimers();
     const app = $("#app");
